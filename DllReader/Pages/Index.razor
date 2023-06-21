@@ -1,0 +1,127 @@
+﻿@page "/"
+
+<h1>DLL-Upload</h1>
+
+<MudDivider DividerType="DividerType.Middle" Class="mt-4 mb-4" />
+
+<MudGrid Style="text-align: center">
+    <MudItem xs="4" sm="4" md="4" />
+    <MudItem xs="4" sm="4" md="4">
+        <MudButton HtmlTag="label" Size="Size.Medium" Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Filled.UploadFile" FullWidth="true" for="fileInput">
+            Upload DLL File
+        </MudButton>
+        <InputFile id="fileInput" OnChange="UploadFiles" accept=".dll" hidden multiple />
+    </MudItem>
+</MudGrid>
+
+<MudDivider DividerType="DividerType.Middle" Class="mt-4 mb-4" />
+
+@if (Types.Count != 0)
+{
+    <MudGrid>
+
+        <MudItem xs="6" sm="6" md="6">
+
+            <MudText Typo="Typo.h6" Class="mb-2">Typen</MudText>
+
+            @foreach (var type in Types.OrderBy(x => x.FullName))
+            {
+                <MudButton Size="Size.Medium"
+                           Color="Color.Success"
+                           Variant="Variant.Filled"
+                           FullWidth="true"
+                           OnClick="@(() => OnClickType(type.FullName))"
+                           Class="mb-1">
+                    @type.FullName
+                </MudButton>
+            }
+        </MudItem>
+
+
+        <MudItem xs="6" sm="6" md="6">
+            @if (Methods.Count != 0)
+            {
+                <MudText Typo="Typo.h6" Class="mb-2">Methoden</MudText>
+                @foreach (var method in Methods.OrderBy(x=> x.Name))
+                {
+                    <MudText>@method.Name</MudText>
+                }
+            }
+
+            @if (Properties.Count != 0)
+            {
+                <MudDivider DividerType="DividerType.Middle" Class="mt-4 mb-4" />
+
+                <MudText Typo="Typo.h6" Class="mb-2">Properties</MudText>
+                @foreach (var property in Properties.OrderBy(x=> x.Name))
+                {
+                    <MudText>@property.Name</MudText>
+                }
+            }
+        </MudItem>
+    </MudGrid>
+}
+
+
+@code
+{
+    public List<Type> Types { get; set; } = new();
+
+    public Assembly DllFile { get; set; }
+
+    public List<MethodInfo> Methods { get; set; } = new();
+
+    public List<PropertyInfo> Properties { get; set; } = new();
+
+    public List<FieldInfo> Fields { get; set; } = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Refresh();
+    }
+
+    public async Task Refresh()
+    {
+        StateHasChanged();
+    }
+
+    private async Task OnClickType(string? typeFullName)
+    {
+        var results = DllFile.GetTypes().ToList();
+
+        var result = results.FirstOrDefault(x => x.FullName == typeFullName);
+
+        if (result != null)
+        {
+            Methods = result.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance).Where(m=> !m.IsSpecialName).ToList();
+
+            Properties = result.GetProperties().ToList();
+        }
+
+        await Refresh();
+    }
+
+    public async Task UploadFiles(InputFileChangeEventArgs uploadedFile)
+    {
+        if (Properties.Count != 0 && Methods.Count != 0)
+        {
+            Methods.Clear();
+            Properties.Clear();
+        }
+
+        await CreateDllFileFromUploadedFile(uploadedFile);
+
+        Types = DllFile.GetTypes().ToList();
+    }
+
+    private async Task CreateDllFileFromUploadedFile(InputFileChangeEventArgs uploadedFile)
+    {
+        var openStream = uploadedFile.File.OpenReadStream(maxAllowedSize: 1024 * 1024 * 10);
+        MemoryStream memoryStream = new MemoryStream();
+        await openStream.CopyToAsync(memoryStream);
+
+        var file = memoryStream.ToArray();
+
+        DllFile = Assembly.Load(file);
+    }
+}
